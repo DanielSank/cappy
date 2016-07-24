@@ -46,7 +46,6 @@ class Protocol(asyncio.Protocol):
         self.stream = streams.JsonDataStream()
         self.id_pool = MessageIdPool()
         self.pending_requests = {}  # Request id -> Task
-        self.name = 'George'
 
     def connection_made(self, transport):
         print("Connection made")
@@ -140,7 +139,6 @@ async def main_client(loop, done, host, port):
         host,
         port)
     print("Connection created at {}:{}".format(host, port))
-    print("Protocol's name is {}".format(protocol.name))
     result = await protocol.make_outbound_request(
         'add',
         [1,2])
