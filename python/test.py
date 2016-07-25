@@ -1,8 +1,8 @@
 import argparse
 import json
 import asyncio
-import streams
-from pool import MessageIdPool
+import stream
+import pool
 
 
 class Protocol(asyncio.Protocol):
@@ -40,11 +40,10 @@ class Protocol(asyncio.Protocol):
         pending_requests(dict): Maps message id's to Task's waiting for that
             message's data.
     """
-    def __init__(self):
-        # TODO: Make attributes initialization parameters.
-        self.loop = asyncio.get_event_loop()
-        self.stream = streams.JsonDataStream()
-        self.id_pool = MessageIdPool()
+    def __init__(self, loop, stream, id_pool):
+        self.loop = loop
+        self.stream = stream
+        self.id_pool = id_pool
         self.pending_requests = {}  # Request id -> Task
 
     def connection_made(self, transport):
@@ -121,9 +120,30 @@ class Protocol(asyncio.Protocol):
         return f
 
 
-async def main_server(loop, done, host, port):
-    server = await loop.create_server(
+class ProtocolFactory:
+    def __init__(self, protocol, loop_factory, stream_factory, pool_factory):
+        self.protocol = protocol
+        self.loop_factory = loop_factory
+        self.stream_factory = stream_factory
+        self.pool_factory = pool_factory
+
+    def __call__(self):
+        loop = self.loop_factory()
+        stream = self.stream_factory()
+        pool = self.pool_factory()
+        return self.protocol(loop, stream, pool)
+
+
+default_protocol_factory = ProtocolFactory(
         Protocol,
+        asyncio.get_event_loop,
+        stream.JsonDataStream,
+        pool.MessageIdPool)
+
+
+async def main_server(protocol_factory, done, host, port):
+    server = await loop.create_server(
+        protocol_factory,
         host,
         port)
     print("Server created. Listening on {}:{}".format(host, port))
@@ -133,9 +153,9 @@ async def main_server(loop, done, host, port):
     print("Server closed")
 
 
-async def main_client(loop, done, host, port):
+async def main_client(protocol_factory, done, host, port):
     transport, protocol = await loop.create_connection(
-        Protocol,
+        protocol_factory,
         host,
         port)
     print("Connection created at {}:{}".format(host, port))
@@ -167,7 +187,7 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     done = asyncio.Event()
-    future = loop.create_task(main(loop, done, host, port))
+    future = loop.create_task(main(default_protocol_factory, done, host, port))
     try:
         loop.run_forever()
     except KeyboardInterrupt:
