@@ -46,7 +46,7 @@ class Protocol:
         if not isinstance(args, (tuple, list)):
             args = (args,)
         method = getattr(implementation, method_name)
-        result = await method(*args)
+        result = await asyncio.coroutine(method)(*args)
         response = {'id': -message_id, 'result': result}
         transport.write(json.dumps(response).encode())
 
@@ -68,7 +68,7 @@ class Calculator:
         result = await self.outbound_requester({'method': 'echo', 'args': z})
         return result
 
-    async def echo(self, data):
+    def echo(self, data):
         print("Serving echo({})".format(data))
         return data
 
