@@ -12,11 +12,6 @@ class Protocol(asyncio.Protocol):
     be used symmetrically, i.e. both ends of the connection should use the same
     protocol.
 
-    The basic flow is as follows.
-        When making an outbound request:
-            1. Somewhere in our code, in a coroutine, we need to make a remote
-                method call. Therefore, we
-
     We assume the data comes in formatted as JSON. If the incoming data is a
     request we assume it has the following fields:
         id (int): Identifies the request. Must be positive.
@@ -75,6 +70,10 @@ class Protocol(asyncio.Protocol):
             # This is a response
             self.id_pool.return_id(-message_id)
             result = message['result']
+            self.pool.return_id(-message_id)
+            # Note that interruption of the thread at this point could be bad,
+            # because we returned the message id but haven't set the result
+            # for that message's future yet.
             self.pending_requests[-message_id].set_result(result)
 
 
@@ -91,14 +90,13 @@ class Protocol(asyncio.Protocol):
 
 
     async def add(self, x, y):
-        print("Serving add of data {}".format((x,y)))
+        print("Serving add({}, {})".format(x, y))
         z = x + y
         result = await self.make_outbound_request('echo', z)
-        print("Done echoing off of peer")
         return result
 
     async def echo(self, data):
-        print("Serving echo of data {}".format(data))
+        print("Serving echo({})".format(data))
         return data
 
     def make_outbound_request(self, method, args):
