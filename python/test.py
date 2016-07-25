@@ -45,6 +45,24 @@ class Protocol(asyncio.Protocol):
         print("Connection made")
         self.transport = transport
 
+    def make_outbound_request(self, method, args):
+        """Make an outbound request.
+
+        Returns:
+            We return a future which is fired when the result of the request is
+            ready. This happens after we receive a response message and parse
+            it.
+        """
+        message_id = self.id_pool.get_id()
+        message = {  # TODO: Use the data stream to parse outgoing data
+            'id': message_id,
+            'method': method,
+            'args': args}
+        self.transport.write(json.dumps(message).encode())
+        f = asyncio.Future()
+        self.pending_requests[message_id] = f
+        return f
+
     def data_received(self, data):
         """Receive incoming bytes and send to the data stream."""
         messages = self.stream.receive(data.decode())
@@ -70,16 +88,6 @@ class Protocol(asyncio.Protocol):
             # This is a response
             self.handle_response(message)
 
-    def handle_response(self, message):
-        message_id = message['id']
-        self.id_pool.return_id(-message_id)
-        result = message['result']
-        # Note that interruption of the thread at this point could be bad,
-        # because we returned the message id but haven't set the result
-        # for that message's future yet.
-        self.pending_requests[-message_id].set_result(result)
-
-
     async def handle_inbound_request(self, message):
         message_id = message['id']
         method_name = message['method']
@@ -91,6 +99,14 @@ class Protocol(asyncio.Protocol):
         response = {'id': -message_id, 'result': result}
         self.transport.write(json.dumps(response).encode())
 
+    def handle_response(self, message):
+        message_id = message['id']
+        self.id_pool.return_id(-message_id)
+        result = message['result']
+        # Note that interruption of the thread at this point could be bad,
+        # because we returned the message id but haven't set the result
+        # for that message's future yet.
+        self.pending_requests[-message_id].set_result(result)
 
     async def add(self, x, y):
         print("Serving add({}, {})".format(x, y))
@@ -101,24 +117,6 @@ class Protocol(asyncio.Protocol):
     async def echo(self, data):
         print("Serving echo({})".format(data))
         return data
-
-    def make_outbound_request(self, method, args):
-        """Make an outbound request.
-
-        Returns:
-            We return a future which is fired when the result of the request is
-            ready. This happens after we receive a response message and parse
-            it.
-        """
-        message_id = self.id_pool.get_id()
-        message = {  # TODO: Use the data stream to parse outgoing data
-            'id': message_id,
-            'method': method,
-            'args': args}
-        self.transport.write(json.dumps(message).encode())
-        f = asyncio.Future()
-        self.pending_requests[message_id] = f
-        return f
 
 
 class ProtocolFactory:
