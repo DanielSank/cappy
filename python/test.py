@@ -153,13 +153,15 @@ async def main_client(connection_factory, done, host, port):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test asyncio server')
-    parser.add_argument('--host', default='localhost')
-    parser.add_argument('--port', default=12344)
-    server_group = parser.add_mutually_exclusive_group(required=False)
-    server_group.add_argument(
-        '--server', dest='as_server', action='store_true')
-    server_group.add_argument(
-        '--client', dest='as_server', action='store_false')
+    parser.add_argument('--host', '-ho', default='localhost',
+                        help="Sets host address")
+    parser.add_argument('--port', '-p', default=12344,
+                        help="Sets connection port")
+    server_group = parser.add_mutually_exclusive_group(required=True)
+    server_group.add_argument('--server', '-s', dest='as_server',
+                              action='store_true', help="Run in server mode")
+    server_group.add_argument('--client', '-c', dest='as_server',
+                              action='store_false', help="Run in client mode")
     parser.set_defaults(as_server=False)
     args = parser.parse_args()
     host, port, as_server = args.host, args.port, args.as_server
@@ -183,4 +185,3 @@ if __name__ == "__main__":
     done.set()
     loop.run_until_complete(future)
     loop.close()
-
