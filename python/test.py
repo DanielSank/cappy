@@ -1,117 +1,72 @@
 import argparse
-import json
 import asyncio
+
+import json
 import stream
 import pool
 
 
-class Connection(asyncio.Protocol):
-    """Request/response messaging protocol
+class Protocol:
+    def __init__(self):
+        self.stream = stream.JsonDataStream()
+        self.id_pool = pool.MessageIdPool()
+        self.pending_requests = {}  # id (int) -> Future
 
-    This protocol is for generic request/response interaction. It is intended to
-    be used symmetrically, i.e. both ends of the connection should use the same
-    protocol.
+    def pack_outbound_request_message(self, message_id, data):
+        """Convert request message data to bytes."""
+        method = data['method']
+        args = data['args']
+        return json.dumps(
+                {'id': message_id, 'method': method, 'args': args}).encode()
 
-    We assume the data comes in formatted as JSON. If the incoming data is a
-    request we assume it has the following fields:
-        id (int): Identifies the request. Must be positive.
-        method (str): Name of the remote method to call.
-        args (list): List of arguments to pass to the remotely called method.
-    For example, a request to a calculator's 'add' method might look like this
-    on the wire: '{"id": 4, "method": "add", "args": [4, 5]}'. If the incoming
-    data is a response to a request we made previously, we assume it has the
-    following fields:
-        id (int): Must be negative, and in particular must be minus the value of
-            the request for which this is the response.
-        result (any): The result of the remote method invokation for which this
-            message is an answer.
+    def is_inbound_request(self, message):
+        """Return True if the message is an inbound request."""
+        return message['id'] > 0
 
-    Attributes:
-        stream: Parses incoming bytes and packages them into individual
-            messages. Each message is a python dict version of the incoming
-            JSON.
-        id_pool (MessageIdPool): Provides values to use in our messaging
-            protocol's id field.
-        pending_requests(dict): Maps message id's to Task's waiting for that
-            message's data.
-    """
-    def __init__(self, loop, stream, id_pool):
-        self.loop = loop
-        self.stream = stream
-        self.id_pool = id_pool
-        self.pending_requests = {}  # Request id -> Task
+    def is_response(self, message):
+        """Return True if the message is a response."""
+        return message['id'] < 0
 
-    def connection_made(self, transport):
-        print("Connection made")
-        self.transport = transport
+    def data_received(self, data):
+        """Convert incoming bytes to a list of messages."""
+        return self.stream.receive(data.decode())
 
-    def make_outbound_request(self, method, args):
-        """Make an outbound request.
-
-        Returns:
-            We return a future which is fired when the result of the request is
-            ready. This happens after we receive a response message and parse
-            it.
-        """
+    def make_outbound_request(self, data, transport):
         message_id = self.id_pool.get_id()
-        message = {  # TODO: Use the data stream to parse outgoing data
-            'id': message_id,
-            'method': method,
-            'args': args}
-        self.transport.write(json.dumps(message).encode())
+        print("The transport is {}".format(transport))
+        transport.write(self.pack_outbound_request_message(
+            message_id, data))
         f = asyncio.Future()
         self.pending_requests[message_id] = f
         return f
 
-    def data_received(self, data):
-        """Receive incoming bytes and send to the data stream."""
-        messages = self.stream.receive(data.decode())
-        for message in messages:
-            self.message_received(message)
-
-    def message_received(self, message):
-        """Handle a message.
-
-        Inbound requests have the following fields:
-            id (int > 0): Message id.
-            method (str): name of method to call.
-            args (object): key/value pairs of named arguments.
-        Inbound responses have the following fields:
-            id (int < 0): Id of request for which this is the response.
-            result (?): Any data type.
-        """
-        message_id = message['id']
-        if message_id > 0:
-            # This is a request
-            self.loop.create_task(self.handle_inbound_request(message))
-        if message_id < 0:
-            # This is a response
-            self.handle_response(message)
-
-    async def handle_inbound_request(self, message):
+    async def handle_inbound_request(self, message, transport, implementation):
         message_id = message['id']
         method_name = message['method']
         args = message['args']
         if not isinstance(args, (tuple, list)):
             args = (args,)
-        method = getattr(self, method_name)
+        method = getattr(implementation, method_name)
         result = await method(*args)
         response = {'id': -message_id, 'result': result}
-        self.transport.write(json.dumps(response).encode())
+        transport.write(json.dumps(response).encode())
 
     def handle_response(self, message):
-        message_id = message['id']
-        self.id_pool.return_id(-message_id)
         result = message['result']
-        # Note that interruption of the thread at this point could be bad,
-        # because we returned the message id but haven't set the result
-        # for that message's future yet.
+        message_id = message['id']
         self.pending_requests[-message_id].set_result(result)
+        self.id_pool.return_id(-message_id)
+        del self.pending_requests[-message_id]
+
+
+class Calculator:
+    def __init__(self, outbound_requester):
+        self.outbound_requester = outbound_requester
 
     async def add(self, x, y):
         print("Serving add({}, {})".format(x, y))
         z = x + y
-        result = await self.make_outbound_request('echo', z)
+        result = await self.outbound_requester({'method': 'echo', 'args': z})
         return result
 
     async def echo(self, data):
@@ -119,25 +74,57 @@ class Connection(asyncio.Protocol):
         return data
 
 
+class Connection(asyncio.Protocol):
+    """Request/response messaging protocol"""
+
+    def __init__(self, loop, protocol):
+        self.loop = loop
+        self.protocol = protocol
+        self.implementation = Calculator(self.make_outbound_request)
+
+    def connection_made(self, transport):
+        print("Connection made")
+        self.transport = transport
+
+    def make_outbound_request(self, data):
+        """Make an outbound request.
+
+        This function should be awaited, as it may make outgoing requests, which
+        are asynchronous. Note that this is kosher because we return a future.
+
+        Returns:
+            We return a future which is fired when the result of the request is
+            ready. This happens after we receive a response message and parse
+            it.
+        """
+        return self.protocol.make_outbound_request(data, self.transport)
+
+    def data_received(self, data):
+        """Convert incoming bytes to messages and dispatch them."""
+        messages = self.protocol.data_received(data)
+        for m in messages:
+            if self.protocol.is_inbound_request(m):
+                self.loop.create_task(
+                    self.protocol.handle_inbound_request(
+                        m, self.transport, self.implementation))
+            elif self.protocol.is_response(m):
+                self.protocol.handle_response(m)
+
+
 class ConnectionFactory:
-    def __init__(self, connection, loop_factory, stream_factory, pool_factory):
-        self.connection = connection
+    def __init__(self, protocol_class, loop_factory):
+        self.protocol_class = protocol_class
         self.loop_factory = loop_factory
-        self.stream_factory = stream_factory
-        self.pool_factory = pool_factory
 
     def __call__(self):
         loop = self.loop_factory()
-        stream = self.stream_factory()
-        pool = self.pool_factory()
-        return self.connection(loop, stream, pool)
+        protocol = self.protocol_class()
+        return Connection(loop, protocol)
 
 
 default_connection_factory = ConnectionFactory(
-        Connection,
-        asyncio.get_event_loop,
-        stream.JsonDataStream,
-        pool.MessageIdPool)
+        Protocol,
+        asyncio.get_event_loop)
 
 
 async def main_server(connection_factory, done, host, port):
@@ -159,8 +146,7 @@ async def main_client(connection_factory, done, host, port):
         port)
     print("Connection created at {}:{}".format(host, port))
     result = await connection.make_outbound_request(
-        'add',
-        [1,2])
+        {'method': 'add', 'args': [1,2]})
     print("Result: {}".format(result))
     await done.wait()
     print("connection should be closed here")
