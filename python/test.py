@@ -33,7 +33,6 @@ class Protocol:
 
     def make_outbound_request(self, data, transport):
         message_id = self.id_pool.get_id()
-        print("The transport is {}".format(transport))
         transport.write(self.pack_outbound_request_message(
             message_id, data))
         f = asyncio.Future()
