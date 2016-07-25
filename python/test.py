@@ -12,7 +12,7 @@ class Protocol:
         self.id_pool = pool.MessageIdPool()
         self.pending_requests = {}  # id (int) -> Future
 
-    def pack_outbound_request_message(self, message_id, data):
+    def _pack_outbound_request_message(self, message_id, data):
         """Convert request message data to bytes."""
         method = data['method']
         args = data['args']
@@ -33,7 +33,7 @@ class Protocol:
 
     def make_outbound_request(self, data, transport):
         message_id = self.id_pool.get_id()
-        transport.write(self.pack_outbound_request_message(
+        transport.write(self._pack_outbound_request_message(
             message_id, data))
         f = asyncio.Future()
         self.pending_requests[message_id] = f
