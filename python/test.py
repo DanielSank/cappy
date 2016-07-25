@@ -52,7 +52,7 @@ class Protocol(asyncio.Protocol):
             self.message_received(message)
 
     def message_received(self, message):
-        """Handle inbound message
+        """Handle a message.
 
         Inbound requests have the following fields:
             id (int > 0): Message id.
@@ -68,13 +68,16 @@ class Protocol(asyncio.Protocol):
             self.loop.create_task(self.handle_inbound_request(message))
         if message_id < 0:
             # This is a response
-            self.id_pool.return_id(-message_id)
-            result = message['result']
-            self.pool.return_id(-message_id)
-            # Note that interruption of the thread at this point could be bad,
-            # because we returned the message id but haven't set the result
-            # for that message's future yet.
-            self.pending_requests[-message_id].set_result(result)
+            self.handle_response(message)
+
+    def handle_response(self, message):
+        message_id = message['id']
+        self.id_pool.return_id(-message_id)
+        result = message['result']
+        # Note that interruption of the thread at this point could be bad,
+        # because we returned the message id but haven't set the result
+        # for that message's future yet.
+        self.pending_requests[-message_id].set_result(result)
 
 
     async def handle_inbound_request(self, message):
