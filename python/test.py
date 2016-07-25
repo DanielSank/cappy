@@ -7,6 +7,7 @@ import pool
 
 
 class Protocol:
+
     def __init__(self):
         self.stream = stream.JsonDataStream()
         self.id_pool = pool.MessageIdPool()
@@ -17,7 +18,7 @@ class Protocol:
         method = data['method']
         args = data['args']
         return json.dumps(
-                {'id': message_id, 'method': method, 'args': args}).encode()
+            {'id': message_id, 'method': method, 'args': args}).encode()
 
     def is_inbound_request(self, message):
         """Return True if the message is an inbound request."""
@@ -59,6 +60,7 @@ class Protocol:
 
 
 class Calculator:
+
     def __init__(self, outbound_requester):
         self.outbound_requester = outbound_requester
 
@@ -111,6 +113,7 @@ class Connection(asyncio.Protocol):
 
 
 class ConnectionFactory:
+
     def __init__(self, protocol_class, loop_factory):
         self.protocol_class = protocol_class
         self.loop_factory = loop_factory
@@ -122,8 +125,8 @@ class ConnectionFactory:
 
 
 default_connection_factory = ConnectionFactory(
-        Protocol,
-        asyncio.get_event_loop)
+    Protocol,
+    asyncio.get_event_loop)
 
 
 async def main_server(connection_factory, done, host, port):
@@ -145,7 +148,7 @@ async def main_client(connection_factory, done, host, port):
         port)
     print("Connection created at {}:{}".format(host, port))
     result = await connection.make_outbound_request(
-        {'method': 'add', 'args': [1,2]})
+        {'method': 'add', 'args': [1, 2]})
     print("Result: {}".format(result))
     await done.wait()
     print("connection should be closed here")
@@ -153,15 +156,25 @@ async def main_client(connection_factory, done, host, port):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test asyncio server')
-    parser.add_argument('--host', '-ho', default='localhost',
+    parser.add_argument('--host',
+                        '-ho',
+                        default='localhost',
                         help="Sets host address")
-    parser.add_argument('--port', '-p', default=12344,
+    parser.add_argument('--port',
+                        '-p',
+                        default=12344,
                         help="Sets connection port")
     server_group = parser.add_mutually_exclusive_group(required=True)
-    server_group.add_argument('--server', '-s', dest='as_server',
-                              action='store_true', help="Run in server mode")
-    server_group.add_argument('--client', '-c', dest='as_server',
-                              action='store_false', help="Run in client mode")
+    server_group.add_argument('--server',
+                              '-s',
+                              dest='as_server',
+                              action='store_true',
+                              help="Run in server mode")
+    server_group.add_argument('--client',
+                              '-c',
+                              dest='as_server',
+                              action='store_false',
+                              help="Run in client mode")
     parser.set_defaults(as_server=False)
     args = parser.parse_args()
     host, port, as_server = args.host, args.port, args.as_server
@@ -185,3 +198,4 @@ if __name__ == "__main__":
     done.set()
     loop.run_until_complete(future)
     loop.close()
+
