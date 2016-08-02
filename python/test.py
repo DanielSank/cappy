@@ -129,7 +129,7 @@ default_connection_factory = ConnectionFactory(
     asyncio.get_event_loop)
 
 
-async def main_server(connection_factory, done, host, port):
+async def main_server(loop, connection_factory, done, host, port):
     server = await loop.create_server(
         connection_factory,
         host,
@@ -141,7 +141,7 @@ async def main_server(connection_factory, done, host, port):
     print("Server closed")
 
 
-async def main_client(connection_factory, done, host, port):
+async def main_client(loop, connection_factory, done, host, port):
     transport, connection = await loop.create_connection(
         connection_factory,
         host,
@@ -152,6 +152,31 @@ async def main_client(connection_factory, done, host, port):
     print("Result: {}".format(result))
     await done.wait()
     print("connection should be closed here")
+
+
+def main(host, port, as_server):
+    if as_server:
+        main = main_server
+    else:
+        main = main_client
+
+    loop = asyncio.get_event_loop()
+    done = asyncio.Event()
+
+    future = loop.create_task(main(
+        loop,
+        default_connection_factory,
+        done,
+        host,
+        port))
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    done.set()
+    loop.run_until_complete(future)
+    loop.close()
+
 
 
 if __name__ == "__main__":
@@ -179,23 +204,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     host, port, as_server = args.host, args.port, args.as_server
 
-    if as_server:
-        main = main_server
-    else:
-        main = main_client
-
-    loop = asyncio.get_event_loop()
-    done = asyncio.Event()
-    future = loop.create_task(main(
-        default_connection_factory,
-        done,
-        host,
-        port))
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    done.set()
-    loop.run_until_complete(future)
-    loop.close()
+    main(host, port, as_server)
 
