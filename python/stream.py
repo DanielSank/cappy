@@ -1,6 +1,42 @@
 import json
 
 
+class ByteStream:
+    HEADER_LENGTH = 2
+
+    def __init__(self):
+        self.buf = b''
+        self.reading_header = True
+        self.payload_length = None
+
+    def receive(self, b):
+        """Take bytes from the wire and return a complete message if avilable.
+
+        Args:
+            b (bytes): Some bytes from the wire.
+
+        Returns:
+            list of message strings.
+        """
+        self.buf = self.buf + b
+        byte_frames= []
+
+        while 1:
+            if not self.reading_header and len(self.buf) >= self.payload_length:
+                byte_frames.append(self.buf[0:self.payload_length])
+                self.buf = self.buf[self.payload_length:]
+                self.reading_header = True
+
+            elif self.reading_header and len(self.buf) >= self.HEADER_LENGTH:
+                self.payload_length = int.from_bytes(
+                    self.buf[0:self.HEADER_LENGTH], 'big')
+                self.buf = self.buf[self.HEADER_LENGTH:]
+                self.reading_header = False
+            else:
+                break
+        return byte_frames
+
+
 class JsonDataStream(object):
     """Consumes bytes and produces JSON objects
 
