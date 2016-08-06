@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 
-import json
 import stream
 import pool
 
