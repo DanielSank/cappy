@@ -9,16 +9,31 @@ import pool
 class Protocol:
 
     def __init__(self):
-        self.stream = stream.JsonDataStream()
+        self.stream = stream.Stream(
+            stream.HeaderByteStream(2),
+            stream.JSONParser())
         self.id_pool = pool.MessageIdPool()
         self.pending_requests = {}  # id (int) -> Future
 
-    def _pack_outbound_request_message(self, message_id, data):
-        """Convert request message data to bytes."""
-        method = data['method']
-        args = data['args']
-        return json.dumps(
-            {'id': message_id, 'method': method, 'args': args}).encode()
+    def _pack_message(self, message):
+        """Flatten a message to binary.
+
+        Args:
+            message (dict): A message.
+
+        TODO: Put this in the stream class.
+        """
+        s = json.dumps(message)
+        b = bytes(s, 'utf-8')
+        l = len(b)
+        header_len = self.stream.bs.header_length
+        max_message_len = 2**(header_len * 8) - 1
+        if l > max_message_len:
+            raise ValueError(
+                "Message length {} exceeds maximum allowed length {}".format(
+                    l, max_message_len))
+        b = l.to_bytes(header_len, byteorder='big') + b
+        return b
 
     def is_inbound_request(self, message):
         """Return True if the message is an inbound request."""
@@ -30,12 +45,12 @@ class Protocol:
 
     def data_received(self, data):
         """Convert incoming bytes to a list of messages."""
-        return self.stream.receive(data.decode())
+        return self.stream.receive(data)
 
-    def make_outbound_request(self, data, transport):
+    def make_outbound_request(self, message, transport):
         message_id = self.id_pool.get_id()
-        transport.write(self._pack_outbound_request_message(
-            message_id, data))
+        message['id'] = message_id
+        transport.write(self._pack_message(message))
         f = asyncio.Future()
         self.pending_requests[message_id] = f
         return f
@@ -49,11 +64,13 @@ class Protocol:
         method = getattr(implementation, method_name)
         result = await asyncio.coroutine(method)(*args)
         response = {'id': -message_id, 'result': result}
-        transport.write(json.dumps(response).encode())
+        transport.write(self._pack_message(response))
 
     def handle_response(self, message):
         result = message['result']
         message_id = message['id']
+        print('handling response to message {} with result {}'.format(
+            -message_id, result))
         self.pending_requests[-message_id].set_result(result)
         self.id_pool.return_id(-message_id)
         del self.pending_requests[-message_id]
