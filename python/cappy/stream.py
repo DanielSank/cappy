@@ -1,22 +1,41 @@
 import json
 
 
-class ByteStream:
-    HEADER_LENGTH = 2
+class Stream:
+    def __init__(self, binary_stream, message_parser):
+        self.bs = binary_stream
+        self.mp = message_parser
 
-    def __init__(self):
+    def receive(self, data):
+        """Receive incoming bytes and produce message objects.
+
+        Args:
+            data (bytes): Bytes off the wire.
+
+        Returns:
+            (list): message objects, e.g. dicts representing JSON messages.
+        """
+        binary_frames = self.bs.receive(data)
+        messages = [self.mp.parse(bf) for bf in binary_frames]
+        return messages
+
+
+class HeaderByteStream:
+
+    def __init__(self, header_length):
         self.buf = b''
         self.reading_header = True
         self.payload_length = None
+        self.header_length = header_length
 
     def receive(self, b):
-        """Take bytes from the wire and return a complete message if avilable.
+        """Collect complete binary frames from incoming byte stream.
 
         Args:
             b (bytes): Some bytes from the wire.
 
         Returns:
-            list of message strings.
+            list of byte arrays, each of which represents a complete frame.
         """
         self.buf = self.buf + b
         byte_frames= []
@@ -27,66 +46,18 @@ class ByteStream:
                 self.buf = self.buf[self.payload_length:]
                 self.reading_header = True
 
-            elif self.reading_header and len(self.buf) >= self.HEADER_LENGTH:
+            elif self.reading_header and len(self.buf) >= self.header_length:
                 self.payload_length = int.from_bytes(
-                    self.buf[0:self.HEADER_LENGTH], 'big')
-                self.buf = self.buf[self.HEADER_LENGTH:]
+                    self.buf[0:self.header_length], 'big')
+                self.buf = self.buf[self.header_length:]
                 self.reading_header = False
             else:
                 break
         return byte_frames
 
 
-class JsonDataStream(object):
-    """Consumes bytes and produces JSON objects
 
-    Attributes:
-        depth (int): Level of nested '{'. While scanning new data, if depth
-            goes to 0, we know we've gotten to the end of a complete JSON
-            object.
-        buf (str): Data we've seen in the past which wasn't part of a complete
-            message.
-    """
+class JSONParser:
+    def parse(self, data):
+        return json.loads(data.decode('utf-8'))
 
-    def __init__(self):
-        self.depth = 0
-        self.buf = ''
-
-    def clear(self):
-        self.buf = ''
-
-    def receive(self, data):
-        """Process incoming bytes, returning a json object if 
-
-        Args:
-            data (string): raw bytes off the wire.
-
-        Returns:
-            (list(json object)): List of json objects.
-        """
-        objects = []
-        # In python these are dicts, which can contain anything at all.
-        # In a language with static types we'd like to provide information to
-        # compiler about the form of these objects.
-
-        start_index = 0
-        s = self.buf + data
-
-        for i, char in enumerate(data):
-            if char == "{":
-                self.depth -= 1
-            elif char == "}":
-                self.depth += 1
-            if self.depth == 0:  # Complete message
-                completed = self.buf + data[start_index: i+1]
-                self.buf = ''
-                objects.append(json.loads(completed))
-                # The loads call here produces a python dict with an arbitrary
-                # number of fields, etc. In a statically typed language we'd
-                # prefer the loads equivalent to produce a more structured
-                # result. In particular, we probably can't do _all_ of the
-                # unflattening in one step.
-
-                start_index = i+1
-        self.buf += data[start_index:]
-        return objects
