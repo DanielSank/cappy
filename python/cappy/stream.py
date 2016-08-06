@@ -19,6 +19,16 @@ class Stream:
         messages = [self.mp.parse(bf) for bf in binary_frames]
         return messages
 
+    def pack_message(self, message):
+        """Flatten a message to binary.
+
+        Args:
+            message (dict): A message.
+
+        TODO: Put this in the stream class.
+        """
+        return self.bs.pack(self.mp.flatten(message))
+
 
 class HeaderByteStream:
 
@@ -55,9 +65,21 @@ class HeaderByteStream:
                 break
         return byte_frames
 
+    def pack(self, b):
+        l = len(b)
+        max_message_len = 2**(self.header_length * 8) - 1
+        if l > max_message_len:
+            raise ValueError(
+                "Message length {} exceeds maximum allowed length {}".format(
+                    l, max_message_len))
+        b = l.to_bytes(self.header_length, byteorder='big') + b
+        return b
+
 
 
 class JSONParser:
     def parse(self, data):
         return json.loads(data.decode('utf-8'))
 
+    def flatten(self, message):
+      return bytes(json.dumps(message), 'utf-8')

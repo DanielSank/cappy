@@ -15,26 +15,6 @@ class Protocol:
         self.id_pool = pool.MessageIdPool()
         self.pending_requests = {}  # id (int) -> Future
 
-    def _pack_message(self, message):
-        """Flatten a message to binary.
-
-        Args:
-            message (dict): A message.
-
-        TODO: Put this in the stream class.
-        """
-        s = json.dumps(message)
-        b = bytes(s, 'utf-8')
-        l = len(b)
-        header_len = self.stream.bs.header_length
-        max_message_len = 2**(header_len * 8) - 1
-        if l > max_message_len:
-            raise ValueError(
-                "Message length {} exceeds maximum allowed length {}".format(
-                    l, max_message_len))
-        b = l.to_bytes(header_len, byteorder='big') + b
-        return b
-
     def is_inbound_request(self, message):
         """Return True if the message is an inbound request."""
         return message['id'] > 0
@@ -50,7 +30,9 @@ class Protocol:
     def make_outbound_request(self, message, transport):
         message_id = self.id_pool.get_id()
         message['id'] = message_id
-        transport.write(self._pack_message(message))
+        print("Making outbound request on method {} with id {}".format(
+            message['method'], message['id']))
+        transport.write(self.stream.pack_message(message))
         f = asyncio.Future()
         self.pending_requests[message_id] = f
         return f
@@ -64,7 +46,7 @@ class Protocol:
         method = getattr(implementation, method_name)
         result = await asyncio.coroutine(method)(*args)
         response = {'id': -message_id, 'result': result}
-        transport.write(self._pack_message(response))
+        transport.write(self.stream.pack_message(response))
 
     def handle_response(self, message):
         result = message['result']
