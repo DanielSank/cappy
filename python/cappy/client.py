@@ -3,9 +3,9 @@ import json
 
 
 message_obj = {
-        "id":1,
-        "method":"square",
-        "args":[4]
+    "id": 1,
+    "method": "square",
+    "args": [4]
 }
 # Ask the service to square the number 4.
 
