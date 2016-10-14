@@ -46,4 +46,5 @@ class TestJSONDataStrem:
         result = s.receive(data[0:10])
         assert result == []
         result = s.receive(data[10:])
-        assert result == [{'id': 1, 'name': "Daniel"}, {'color': "green"}]
+        assert result == [{'id': 1, 'name': "Daniel"},{'color': "green"}]
+

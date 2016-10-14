@@ -19,5 +19,5 @@ def main(host='localhost', port=8083):
     reactor.run()
 
 
-if __name__ == '__main__':
+if __name__=='__main__':
     main()
