@@ -86,8 +86,8 @@ class Dispatcher(Asyncable):
 
     Attributes:
         m (dict): The fileno -> Asyncable map of the Reactor managing this
-            Dispatcher's I/O.
-        protocol_class: The class representing 
+                  Dispatcher's I/O.
+        protocol_class: The class representing
     """
 
     def __init__(self, host, port, m, protocol_class, socket=None):
@@ -112,7 +112,7 @@ class Dispatcher(Asyncable):
         self.socket.listen(1)
         self.m[self.fileno()] = self
 
-    ### Asyncable interface
+    # Asyncable interface
     def readable(self):
         return True
 
@@ -170,7 +170,7 @@ class Connection(Asyncable):
         """
         self.write_buf += data
 
-    ### Asyncable interface
+    # Asyncable interface
     def readable(self):
         return True
 
