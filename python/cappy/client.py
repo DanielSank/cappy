@@ -19,7 +19,7 @@ def main():
     sock.send(message_string)
     data = sock.recv(1024)
     sock.close()
-    print data
+    print(data)
 
 
 if __name__ == "__main__":
