@@ -2,6 +2,7 @@ import json
 
 
 class Stream:
+
     def __init__(self, binary_stream, message_parser):
         self.bs = binary_stream
         self.mp = message_parser
@@ -48,7 +49,7 @@ class HeaderByteStream:
             list of byte arrays, each of which represents a complete frame.
         """
         self.buf = self.buf + b
-        byte_frames= []
+        byte_frames = []
 
         while 1:
             if not self.reading_header and len(self.buf) >= self.payload_length:
@@ -76,10 +77,10 @@ class HeaderByteStream:
         return b
 
 
-
 class JSONParser:
+
     def parse(self, data):
         return json.loads(data.decode('utf-8'))
 
     def flatten(self, message):
-      return bytes(json.dumps(message), 'utf-8')
+        return bytes(json.dumps(message), 'utf-8')

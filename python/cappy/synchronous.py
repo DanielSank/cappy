@@ -27,6 +27,7 @@ async def echo_async(connection, data):
 
 
 class SynchronousClient:
+
     def __init__(self, connection):
         self.connection = connection
 
@@ -52,4 +53,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
