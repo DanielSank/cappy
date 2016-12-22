@@ -29,8 +29,9 @@ class Protocol:
     def make_outbound_request(self, message, transport):
         message_id = self.id_pool.get_id()
         message['id'] = message_id
-        print("Making outbound request on method {} with id {}".format(
-            message['method'], message['id']))
+        print("Making outbound request on method {} with "
+              "args {} and id {}".format(
+                  message['method'], message['args'], message['id']))
         transport.write(self.stream.pack_message(message))
         f = asyncio.Future()
         self.pending_requests[message_id] = f
