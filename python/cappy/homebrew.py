@@ -2,8 +2,8 @@ import socket
 
 
 from cappy.future import Future, call_as_future
-from cappy.handler import Handler, Reactor
 import cappy.pool as pool
+from cappy.reactor import Handler, Reactor
 import cappy.stream as stream
 
 
