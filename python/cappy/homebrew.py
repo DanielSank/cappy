@@ -3,9 +3,8 @@ import socket
 
 from cappy.calculator import CalculatorFutures as Calculator
 from cappy.future import Future, call_as_future
-import cappy.pool as pool
+import cappy.demo_protocol as cprotocol
 from cappy.reactor import Handler, Reactor
-import cappy.stream as stream
 
 
 def get_listen_socket(host, port):
@@ -67,38 +66,7 @@ class ConnectionHandler(Handler):
         self.socket.close()
 
 
-class Protocol:
-
-    def __init__(self, writer, future_factory):
-        self.stream = stream.Stream(
-                stream.HeaderByteStream(2),
-                stream.JSONParser())
-        self.id_pool = pool.MessageIdPool()
-        self.pending_requests = {}  # (int) --> Future
-        self._writer = writer
-        self.future_factory = future_factory
-
-        self.implementation = Calculator(self.make_outbound_request)
-
-    def is_inbound_request(self, message):
-        return message['id'] > 0
-
-    def is_response(self, message):
-        return message['id'] < 0
-
-    def data_received(self, data):
-        return self.stream.receive(data)
-
-    def make_outbound_request(self, message):
-        message_id = self.id_pool.get_id()
-        message['id'] = message_id
-        print("Making outbound request on method {} with "
-              "args {} and id {}".format(
-                  message['method'], message['args'], message['id']))
-        self.write(self.stream.pack_message(message))
-        f = self.future_factory()
-        self.pending_requests[message_id] = f
-        return f
+class Protocol(cprotocol.Protocol):
 
     def handle_inbound_request(self, message):
         message_id = message['id']
@@ -112,16 +80,6 @@ class Protocol:
             response = {'id': -message_id, 'result': result}
             self.write(self.stream.pack_message(response))
         future.add_callback(callback)
-
-    def handle_response(self, message):
-        result = message['result']
-        message_id = message['id']
-        self.pending_requests[-message_id].set_result(result)
-        self.id_pool.return_id(-message_id)
-        del self.pending_requests[-message_id]
-
-    def write(self, data):
-        self._writer(data)
 
 
 class ClientHandler(Handler):
@@ -142,7 +100,7 @@ class ClientHandler(Handler):
         self.addr = addr
         self.connection_closed = connection_closed
         self.buf = b''
-        self.protocol = Protocol(self.add_to_buf, Future)
+        self.protocol = Protocol(self.add_to_buf, Future, Calculator)
 
     def add_to_buf(self, data):
         self.buf += data
