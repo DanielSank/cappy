@@ -1,8 +1,11 @@
+from abc import ABCMeta, abstractmethod
+
+
 import cappy.pool as pool
 import cappy.stream as stream
 
 
-class Protocol:
+class Protocol(metaclass=ABCMeta):
 
     def __init__(self, writer, future_factory, implementation_class):
         self.stream = stream.Stream(
@@ -34,6 +37,10 @@ class Protocol:
         f = self.future_factory()
         self.pending_requests[message_id] = f
         return f
+
+    @abstractmethod
+    def handle_inbound_request(self, message):
+        pass
 
     def handle_response(self, message):
         result = message['result']
