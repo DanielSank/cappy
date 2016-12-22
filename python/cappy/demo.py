@@ -1,8 +1,8 @@
 import argparse
 import asyncio
 
-import stream
-import pool
+import cappy.stream as stream
+import cappy.pool as pool
 
 
 class Protocol:
