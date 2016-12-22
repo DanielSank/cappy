@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 
+from cappy.calculator import CalculatorAsyncio as Calculator
 import cappy.stream as stream
 import cappy.pool as pool
 
@@ -56,22 +57,6 @@ class Protocol:
         self.pending_requests[-message_id].set_result(result)
         self.id_pool.return_id(-message_id)
         del self.pending_requests[-message_id]
-
-
-class Calculator:
-
-    def __init__(self, outbound_requester):
-        self.outbound_requester = outbound_requester
-
-    async def add(self, x, y):
-        print("Serving add({}, {})".format(x, y))
-        z = x + y
-        result = await self.outbound_requester({'method': 'echo', 'args': z})
-        return result
-
-    def echo(self, data):
-        print("Serving echo({})".format(data))
-        return data
 
 
 class Connection(asyncio.Protocol):

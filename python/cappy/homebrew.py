@@ -1,6 +1,7 @@
 import socket
 
 
+from cappy.calculator import CalculatorFutures as Calculator
 from cappy.future import Future, call_as_future
 import cappy.pool as pool
 from cappy.reactor import Handler, Reactor
@@ -64,19 +65,6 @@ class ConnectionHandler(Handler):
 
     def close(self):
         self.socket.close()
-
-
-class Calculator:
-    def __init__(self, outbound_requester):
-        self.outbound_requester = outbound_requester
-
-    def add(self, x, y):
-        z = x+y
-        f = self.outbound_requester({'method': 'echo', 'args': z})
-        return f
-
-    def echo(self, x):
-        return x
 
 
 class Protocol:
