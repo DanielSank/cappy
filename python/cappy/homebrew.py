@@ -68,15 +68,16 @@ class ConnectionHandler(Handler):
 
 
 class Protocol:
-    def __init__(self, writer):
+
+    def __init__(self, writer, future_factory):
         self.stream = stream.Stream(
                 stream.HeaderByteStream(2),
                 stream.JSONParser())
         self.id_pool = pool.MessageIdPool()
         self.pending_requests = {}  # (int) --> Future
         self._writer = writer
+        self.future_factory = future_factory
 
-        # TODO: remove this
         self.implementation = Calculator(self.make_outbound_request)
 
     def is_inbound_request(self, message):
@@ -91,10 +92,13 @@ class Protocol:
     def make_outbound_request(self, message):
         message_id = self.id_pool.get_id()
         message['id'] = message_id
+        print("Making outbound request on method {} with "
+              "args {} and id {}".format(
+                  message['method'], message['args'], message['id']))
         self.write(self.stream.pack_message(message))
-        future = Future()
-        self.pending_requests[message_id] = future
-        return future
+        f = self.future_factory()
+        self.pending_requests[message_id] = f
+        return f
 
     def handle_inbound_request(self, message):
         message_id = message['id']
@@ -112,7 +116,7 @@ class Protocol:
     def handle_response(self, message):
         result = message['result']
         message_id = message['id']
-        self.pending_requests[-message_id].fire(result)
+        self.pending_requests[-message_id].set_result(result)
         self.id_pool.return_id(-message_id)
         del self.pending_requests[-message_id]
 
@@ -138,7 +142,7 @@ class ClientHandler(Handler):
         self.addr = addr
         self.connection_closed = connection_closed
         self.buf = b''
-        self.protocol = Protocol(self.add_to_buf)
+        self.protocol = Protocol(self.add_to_buf, Future)
 
     def add_to_buf(self, data):
         self.buf += data

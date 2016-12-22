@@ -9,7 +9,7 @@ class Future:
         if self._fired:
             self._execute_callbacks(self.result)
 
-    def fire(self, result=None):
+    def set_result(self, result=None):
         if self._fired == True:
             raise RuntimeError("Cannot fire Future twice")
         self._fired = True
@@ -31,6 +31,6 @@ def call_as_future(func, *args):
         return result
     else:
         f = Future()
-        f.fire(result)
+        f.set_result(result)
         return f
 
